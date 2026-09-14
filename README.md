@@ -20,6 +20,8 @@
 | 安全存储 | API Key 用 Android Keystore + AES-256-GCM 加密落盘，不存明文 |
 | 桌面端桥接 | 对无公开 API 的平台，通过局域网 HTTP 协议从桌面 CLI 拉取额度 |
 | 离线可用 | 所有 UI 由本地缓存驱动，网络抖动不影响查看 |
+| 桌面小组件 | 主屏小组件直接显示当前最低关键额度百分比 |
+| 首次引导 | 冷启动三屏 Onboarding，一次点击直达主页 |
 
 ## 支持的平台
 
@@ -81,9 +83,11 @@ app/src/main/java/com/aiquota/app/
 │   ├── detail/                  #   单平台详情 + 历史
 │   ├── addaccount/              #   添加账号
 │   ├── settings/                #   设置
+│   ├── onboarding/              #   首次引导
 │   ├── components/              #   复用组件
 │   ├── theme/                   #   主题
 │   └── util/                    #   格式化工具
+├── widget/                      # 桌面 AppWidget
 └── work/                        # WorkManager：周期同步 + 额度评估
 ```
 
