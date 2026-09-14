@@ -22,5 +22,4 @@ signing.properties
 .DS_Store
 /captures
 .cxx/
-main
-clound
+/clound
