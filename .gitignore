@@ -1,0 +1,26 @@
+# Gradle / Build
+.gradle/
+build/
+**/build/
+.kotlin/
+captures/
+local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Android
+*.apk
+*.aab
+*.keystore
+*.jks
+signing.properties
+
+# Misc
+.DS_Store
+/captures
+.cxx/
+main
+clound
