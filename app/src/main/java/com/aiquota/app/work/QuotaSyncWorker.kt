@@ -8,6 +8,7 @@ import com.aiquota.app.core.notify.QuotaNotifier
 import com.aiquota.app.domain.repository.NotificationRepository
 import com.aiquota.app.domain.repository.QuotaRepository
 import com.aiquota.app.domain.repository.SettingsRepository
+import com.aiquota.app.widget.QuotaWidgetProvider
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -28,6 +29,7 @@ class QuotaSyncWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         return runCatching {
             quotaRepository.refreshAll()
+            QuotaWidgetProvider.requestUpdate(applicationContext)
             evaluateIfAny()
         }.fold(
             onSuccess = { Result.success() },

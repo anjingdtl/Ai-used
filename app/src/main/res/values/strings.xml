@@ -2,4 +2,8 @@
 <resources>
     <string name="app_name">AI 额度管家</string>
     <string name="app_name_en">AI Quota</string>
+    <string name="widget_description">显示当前最低的关键额度百分比</string>
+    <string name="widget_lowest">关键额度最低</string>
+    <string name="widget_none">暂未添加账号</string>
+    <string name="widget_syncing">刷新中…</string>
 </resources>
