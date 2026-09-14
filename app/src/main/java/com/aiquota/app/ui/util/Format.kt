@@ -15,7 +15,7 @@ object Format {
         else -> "${value.roundPercent()}%"
     }
 
-    fun Double.roundPercent(): Int = (kotlin.math.round(this)).toInt()
+    fun Double.roundPercent(): Int = kotlin.math.floor(this + 0.5).toInt()
 
     /** 带单位的数值，保留合理小数 */
     fun number(value: Double?, unit: String?): String {
