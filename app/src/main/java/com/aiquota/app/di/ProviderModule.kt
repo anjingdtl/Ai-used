@@ -31,24 +31,17 @@ object ProviderModule {
 
     @Provides
     @Singleton
-    fun provideBridgeLoader(
-        secureCipherStore: SecureCipherStore
-    ): suspend (accountId: String) -> BridgeConnection? = { accountId ->
-        val blob = secureCipherStore.decrypt(BRIDGE_PREFIX + accountId, BRIDGE_PREFIX)
-        // blob = "<url>\n<secret>"
-        blob?.split("\n", limit = 2)
-            ?.map { it.trim() }
-            ?.let { parts ->
-                val url = parts.firstOrNull()?.takeIf { it.isNotBlank() } ?: return@let null
-                BridgeConnection(url = url, secret = parts.getOrNull(1)?.takeIf { it.isNotBlank() })
-            }
-    }
-
-    @Provides
-    @Singleton
-    fun provideProviderRegistry(
-        secretLoader: suspend (accountId: String) -> BridgeConnection?
-    ): ProviderRegistry {
+    fun provideProviderRegistry(secureCipherStore: SecureCipherStore): ProviderRegistry {
+        val secretLoader: suspend (accountId: String) -> BridgeConnection? = { accountId ->
+            val blob = secureCipherStore.decrypt(BRIDGE_PREFIX + accountId, BRIDGE_PREFIX)
+            // blob = "<url>\n<secret>"
+            blob?.split("\n", limit = 2)
+                ?.map { it.trim() }
+                ?.let { parts ->
+                    val url = parts.firstOrNull()?.takeIf { it.isNotBlank() } ?: return@let null
+                    BridgeConnection(url = url, secret = parts.getOrNull(1)?.takeIf { it.isNotBlank() })
+                }
+        }
         val codex = BridgeQuotaProvider(
             providerId = ProviderId.OPENAI_CODEX.key,
             secretLoader = secretLoader,
