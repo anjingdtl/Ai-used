@@ -69,7 +69,7 @@ fun SettingsScreen(
                     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                         RefreshIntervalOption(
                             interval = settings.autoRefreshInterval,
-                            onSelect = { viewModel.setRefreshIntervalMinutes(it.minutes) }
+                            onSelect = { viewModel.setRefreshIntervalMillis(it.durationMillis) }
                         )
                     }
                 }

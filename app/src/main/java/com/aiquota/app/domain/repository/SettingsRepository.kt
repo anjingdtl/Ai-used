@@ -9,6 +9,6 @@ interface SettingsRepository {
     suspend fun update(transform: (AppSettings) -> AppSettings)
     suspend fun setThresholds(thresholds: List<Int>)
     suspend fun setRealtimeMonitoring(enabled: Boolean)
-    suspend fun setRefreshInterval(minutes: Int)
+    suspend fun setRefreshInterval(millis: Long)
     suspend fun markOnboardingCompleted()
 }

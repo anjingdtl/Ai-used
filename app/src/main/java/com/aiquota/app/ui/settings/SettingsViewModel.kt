@@ -24,8 +24,8 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setRealtimeMonitoring(enabled) }
     }
 
-    fun setRefreshIntervalMinutes(minutes: Int) {
-        viewModelScope.launch { settingsRepository.setRefreshInterval(minutes) }
+    fun setRefreshIntervalMillis(millis: Long) {
+        viewModelScope.launch { settingsRepository.setRefreshInterval(millis) }
     }
 
     fun setThresholds(thresholds: List<Int>) {

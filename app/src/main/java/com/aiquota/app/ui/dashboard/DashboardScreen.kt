@@ -22,6 +22,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +47,10 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // 前台可见（STARTED）时开启自动刷新，离开时关闭。
+    LaunchedEffect(Unit) { viewModel.setForeground(true) }
+    DisposableEffect(Unit) { onDispose { viewModel.setForeground(false) } }
 
     Scaffold(
         topBar = {

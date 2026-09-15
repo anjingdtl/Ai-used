@@ -1,12 +1,18 @@
 package com.aiquota.app.domain.model
 
-/** 刷新间隔策略 */
-enum class RefreshInterval(val labelId: String, val minutes: Int) {
-    S30S("30 秒", 1),   // 前台 30 秒用 1 分钟占位（后台仅用于实时监控）
-    MIN1("1 分钟", 1),
-    MIN2("2 分钟", 2),
-    MIN5("5 分钟", 5),
-    MANUAL("仅手动", 0);
+/**
+ * 刷新间隔策略。
+ *
+ * [durationMillis] 为真实毫秒数：30s/1m/2m/5m/手动(0)。
+ * MANUAL 停止前台定时刷新；>0 的值供前台 Dashboard 可见时按此间隔自动刷新。
+ * （后台周期刷新由 WorkManager 单独负责，见 QuotaSyncScheduler。）
+ */
+enum class RefreshInterval(val labelId: String, val durationMillis: Long) {
+    S30S("30 秒", 30_000L),
+    MIN1("1 分钟", 60_000L),
+    MIN2("2 分钟", 120_000L),
+    MIN5("5 分钟", 300_000L),
+    MANUAL("仅手动", 0L);
 }
 
 /** 全局应用设置 */

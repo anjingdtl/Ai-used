@@ -8,12 +8,17 @@ import com.aiquota.app.domain.model.ProviderId
 import com.aiquota.app.domain.model.ProviderState
 import com.aiquota.app.domain.repository.AccountRepository
 import com.aiquota.app.domain.repository.QuotaRepository
+import com.aiquota.app.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -41,11 +46,15 @@ data class DashboardUiState(
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val accountRepository: AccountRepository,
-    private val quotaRepository: QuotaRepository
+    private val quotaRepository: QuotaRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _isRefreshing = MutableStateFlow(false)
     private val _refreshError = MutableStateFlow<String?>(null)
+
+    /** 前台自动刷新协程：仅在 Dashboard 可见时运行，随设置动态改变间隔。 */
+    private var autoRefreshJob: Job? = null
 
     val uiState: StateFlow<DashboardUiState> = combine(
         accountRepository.observeAccounts(),
@@ -86,6 +95,32 @@ class DashboardViewModel @Inject constructor(
                 _refreshError.value = e.message ?: "刷新失败"
             } finally {
                 _isRefreshing.value = false
+            }
+        }
+    }
+
+    /**
+     * 前台可见性变化时调用，启停前台定时刷新。
+     *
+     * Dashboard 可见（STARTED）时启动循环，每个周期读取最新间隔，
+     * 用户改间隔无需重启 App；MANUAL(0) 不触发刷新。
+     * 不可见时取消，避免后台空转。
+     */
+    fun setForeground(visible: Boolean) {
+        if (!visible) {
+            autoRefreshJob?.cancel()
+            autoRefreshJob = null
+            return
+        }
+        if (autoRefreshJob?.isActive == true) return
+        autoRefreshJob = viewModelScope.launch {
+            while (isActive) {
+                val interval = settingsRepository.observeSettings().first().autoRefreshInterval.durationMillis
+                if (interval > 0) {
+                    refreshAll()
+                }
+                // MANUAL(0) 时保活但不刷新；否则按间隔 sleep。
+                delay(if (interval > 0) interval else 30_000L)
             }
         }
     }
