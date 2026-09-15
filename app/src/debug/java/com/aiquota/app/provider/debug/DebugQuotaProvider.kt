@@ -22,7 +22,7 @@ import java.time.temporal.ChronoUnit
 /**
  * Debug Provider：仅存在于 debug 构建，用于无真实账号时验证 UI 与状态。
  * 支持模拟 100% / 61% / 20% / 5% / 0% 以及 LIVE / CACHED / NETWORK_ERROR / 401 / 429 / 5xx。
- * Release 构建完全不包含此文件（位于 src/debug）。
+ * Release 构建完全不编译此文件（位于 src/debug），因此 Release APK 不含任何 mock 代码。
  */
 enum class MockScenario(val key: String) {
     P100("100"),
