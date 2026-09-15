@@ -1,23 +1,40 @@
-# Grok / xAI 额度
+# Grok / xAI 额度（`providerId: grok`）
 
-## 额度规则
+> 最后核实日期：2026-09-15（以官方现状为准，勿以本文替代线上核实）
+> 状态：**代码已实现（Unavailable 占位）；官方无额度接口，不支持**
 
-Grok 个人套餐（Grok Basic / Super）为订阅制。**截至当前调研，xAI 官方未开放对个人用户的额度查询接口**，无法可靠获取剩余用量。
+## 套餐结构
 
-App 将其标记为 `UNAVAILABLE` 平台：
+Grok / xAI（Grok Build）采用订阅制。官方**不提供**面向用户的额度查询 API。
 
-| 项 | 值 |
-| --- | --- |
-| connectorType | `UNAVAILABLE` |
-| providerId | `grok` |
-| 额度状态 | 一直显示为「暂未开放额度查询」，不发起网络请求 |
+## 额度窗口
 
-实现上由 `UnavailableQuotaProvider` 占位，`QuotaRepositoryImpl.refresh` 对 `UNAVAILABLE` 账号直接跳过查询并记录 `UNAVAILABLE` 状态，不产生无谓的网络流量。
+Grok Build CLI 的 TUI 内 `/usage` 会显示周池百分比，但仅交互式可见。
 
-## 未来接入
+## 是否有官方 API
 
-若 xAI 日后开放额度接口，只需：
+**否**。官方未开放订阅剩余额度 REST API。
 
-1. 实现 `QuotaProvider` 返回该平台额度；
-2. 在 `ProviderId` + DI 中注册；
-3. 把账号 connectorType 从 `UNAVAILABLE` 改为 `BRIDGE` / `API` 即可，UI 与仓库无需改动。
+## 是否有官方 CLI 查询能力
+
+`grok` CLI 存在，但 `/usage` 是交互式 TUI，非交互取不到稳定数字。
+
+## 认证方式
+
+- 桌面端：grok CLI 本地登录态。
+- Android 端：无第三方密钥。
+
+## 是否支持 Android 直连
+
+否。官方无接口，**不支持直连也不支持可靠 Bridge 取值**。
+
+## 实际代码实现方式
+
+- Android：`ProviderModule.bindGrok()` = `UnavailableQuotaProvider`（永远返回 UNAVAILABLE）。
+- 桌面桥：`GrokAdapter` 探测到 grok CLI 存在即标记"可用"，但 `/usage` 交互无法自动取值，
+  额度统一返回 `source="unsupported"`，不会编造数字。
+
+## 可靠性风险
+
+- 官方未提供接口 → App 对该平台显示 `UNAVAILABLE`，不做伪额度。
+- 一旦官方提供 Usage/Quota API 或 CLI 非交互能力，再升级为真实 Provider。

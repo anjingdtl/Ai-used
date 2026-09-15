@@ -1,20 +1,45 @@
-# ChatGPT / Codex 额度
+# ChatGPT / Codex 额度（`providerId: codex`）
 
-## 额度规则
+> 最后核实日期：2026-09-15（以官方现状为准，勿以本文替代线上核实）
+> 状态：**代码已实现，真实 E2E 未验收**
 
-ChatGPT Plus / Pro 与 Codex 属于**订阅制**，官方没有面向用户的精确 Token 配额仪表盘，主要通过账号内的用量/触发限流判断。
+## 套餐结构
 
-App 将该平台建模为：
+ChatGPT Plus / Pro 与 Codex 采用**订阅制**。官方不提供面向用户的精确 Token 配额仪表盘，
+也没有公开的 Usage REST API（有 `platform.openai.com/usage` 组织级用量，但那是 API 计费，
+**不是**订阅套餐剩余额度，App 禁止用它冒充订阅额度）。
 
-| Bucket | windowType | type | 说明 |
-| --- | --- | --- | --- |
-| 订阅额度 | `CUSTOM` | `PERCENT` | `isKeyBucket`，用于告警 |
+## 额度窗口
 
-## 连接方式
+Codex 的用量/限流以**会话内**触发为准；无稳定、非交互可取的"剩余额度"数值接口。
 
-- 通过「桌面本地桥接」（`bridge` connector）获取运行桌面端 Codex CLI 的额度信号。
-- 桌面端 Codex 亦可将登录会话桥接给 App。
+## 是否有官方 API
 
-`providerId`: `codex`。
+- **额度查询**：无公开的订阅剩余额度 API。
+- **API 计费用量**：`platform.openai.com/usage` 存在，但属组织 API 计费，与订阅套餐额度是两码事，不采用。
 
-> 说明：Codex 的精确额度字段随官方产品演进而变化，App 以通用 `BridgeBucket` 承载，Bridge 提供多少字段即展示多少，避免未来接口变更时改客户端。
+## 是否有官方 CLI 查询能力
+
+- `codex` CLI：`codex status` 仅返回**登录态**，不返回额度数字。
+- 额度需在**交互式会话**内 `/status` 查看，无法可靠地非交互解析。
+
+## 认证方式
+
+- 桌面端：`codex login` / `codex auth` 建立的本地登录态。
+- Android 端：无第三方密钥，凭据为 Bridge Bearer。
+
+## 是否支持 Android 直连
+
+否。无 Android 可直连的订阅额度接口，**必须 Bridge**。
+
+## 实际代码实现方式
+
+- Android：`BridgeQuotaProvider`（connector=BRIDGE），经 `BridgeClient` 调桌面桥 `/quota?X-Provider=codex`。
+- 桌面桥：`CodexAdapter` 调 `codex status` 判定登录态；因额度需会话内 `/status` 交互，
+  当前对额度返回 `source="unsupported"`（诚实标注），不会编造数字。
+
+## 可靠性风险
+
+- 无自动化额度取值来源 → 无法在 Bridge 端得到稳定数值，需等待官方 CLI/API 提供。
+- 若坚持解析 CLI 文本：必须独立解析器 + fixture 测试 + 版本识别 + 失败明确返回 unsupported，
+  禁止脆弱地截取终端 ANSI。

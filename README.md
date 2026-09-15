@@ -25,16 +25,20 @@
 
 ## 支持的平台
 
-| 平台 | 连接方式 | 额度数据 | 状态 |
+> 状态口径：**代码状态** = 仓库内实现到什么程度；**真实 E2E** = 是否已用真实账号 + 真实查询跑通端到端。
+> 直到用真实账号完成一次成功查询，任何平台都**不会**标记为「可查询」。
+
+| 平台 | 实现方式 | 代码状态 | 真实 E2E 状态 |
 | --- | --- | --- | --- |
-| ChatGPT / Codex | 桌面本地桥接 | 订阅额度 | 可查询 |
-| 智谱 GLM Coding Plan | 桌面本地桥接 | 5 小时 + 每周积分 | 可查询 |
-| MiniMax Token / Coding Plan | 桌面本地桥接 | Token / 用量 | 可查询 |
-| OpenCode Go | 桌面本地桥接 | 额度 | 可查询 |
-| Grok / xAI | 桌面本地桥接 | 订阅额度 | 暂未开放额度接口 |
-| Debug（内置模拟数据） | 本地模拟 | 随机额度 | 仅 debug 构建 |
+| ChatGPT / Codex | Android Bridge Provider + 桌面桥适配器 | 已实现（Bridge 协议就绪） | 未验收（需桌面 CLI 登录态/Tokey 且 Android 连接 Bridge） |
+| 智谱 GLM Coding Plan | Android Bridge Provider + 官方用量接口适配器 | 已实现 | 未验收（待真实账号 Token 验证） |
+| MiniMax Token / Coding Plan | Android Bridge Provider + 桌面桥适配器 | 已实现 | 未验收（待真实账号 Token 验证） |
+| OpenCode Go | Android Bridge Provider + 桌面桥适配器 | 已实现 | 未验收（待真实账号 Token 验证） |
+| Grok / xAI | Unavailable 占位 Provider | 已实现（后端明确不提供额度接口） | 官方无接口，不支持 |
+| Debug（内置模拟数据） | 本地 Mock（仅 `src/debug`） | 已实现 | 仅 debug 构建，**打不进 Release** |
 
 各平台额度数据与桥接协议详见 [docs/providers](docs/providers/)。
+桌面桥使用方式见 [desktop-bridge/README.md](desktop-bridge/README.md)。
 
 ## 快速开始
 
@@ -42,18 +46,21 @@
 
 ```bash
 # 构建 debug APK
-gradle :app:assembleDebug
+./gradlew :app:assembleDebug
 
 # 单元测试
-gradle :app:testDebugUnitTest
+./gradlew :app:testDebugUnitTest
 
-# 静态验收 APK（无需模拟器）
-/opt/android-sdk/cmdline-tools/latest/bin/apkanalyzer manifest print \
-  app/build/outputs/apk/debug/app-debug.apk
+# Lint
+./gradlew :app:lintDebug
+
+# 桌面桥解析自测（无真实账号也能验证解析逻辑）
+python3 desktop-bridge/bridge_self_test.py
 ```
 
-> 说明：本项目仓库未包含 Gradle wrapper，使用系统安装的 Gradle 8.14.x 构建。
-> 若在受限网络环境，需在 `gradle.properties` 中配置代理（见文件内注释）。
+> 仓库已内置 Gradle Wrapper（`./gradlew` / `gradlew.bat`），无需自备 Gradle。
+> Windows 用 `gradlew.bat assembleDebug`；Linux/macOS 用 `./gradlew assembleDebug`。
+> 依赖仓库可按环境自动切换官方仓库与阿里云镜像（见 `settings.gradle.kts`）。
 
 ## 目录结构
 
@@ -97,5 +104,5 @@ Clean Architecture 分层，见 [docs/architecture.md](docs/architecture.md)。
 
 ## 测试与验收
 
-单元测试 11 个全绿（Repository 刷新/缓存/错误处理、Mapper 映射、格式化工具）。
+单元测试覆盖 Credential 链、Keystore AES-GCM、Last-Known-Good 断网流、同步事件、Bridge 客户端与 Provider、通知恢复、历史清理、刷新间隔等。
 运行与静态验收说明见 [docs/acceptance-testing.md](docs/acceptance-testing.md)。
