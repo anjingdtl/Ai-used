@@ -1,9 +1,9 @@
 package com.aiquota.app.domain.repository
 
 import com.aiquota.app.domain.model.AuthResult
-import com.aiquota.app.domain.model.ProviderAccount
 import com.aiquota.app.domain.model.ProviderCapabilities
 import com.aiquota.app.domain.model.ProviderCredential
+import com.aiquota.app.domain.model.ProviderExecutionContext
 import com.aiquota.app.domain.model.QuotaSnapshot
 
 /**
@@ -16,7 +16,7 @@ interface QuotaProvider {
 
     suspend fun authenticate(credential: ProviderCredential): AuthResult
 
-    suspend fun fetchQuota(account: ProviderAccount): QuotaSnapshot
+    suspend fun fetchQuota(context: ProviderExecutionContext): QuotaSnapshot
 
     suspend fun validateCredential(credential: ProviderCredential): Boolean
 

@@ -15,6 +15,7 @@ import com.aiquota.app.domain.model.QuotaSnapshot
 import com.aiquota.app.domain.model.QuotaType
 import com.aiquota.app.domain.model.SyncStatus
 import com.aiquota.app.domain.model.WindowType
+import com.aiquota.app.domain.repository.CredentialStore
 import com.aiquota.app.domain.repository.HistoryRepository
 import com.aiquota.app.domain.repository.QuotaProvider
 import com.aiquota.app.provider.ProviderRegistry
@@ -41,6 +42,7 @@ class QuotaRepositoryImplTest {
     private val quotaDao = mockk<QuotaDao>(relaxed = true)
     private val eventDao = mockk<EventDao>(relaxed = true)
     private val historyRepository = mockk<HistoryRepository>(relaxed = true)
+    private val credentialStore = mockk<CredentialStore>(relaxed = true)
     private val providerRegistry = mockk<ProviderRegistry>()
     private val provider = mockk<QuotaProvider>()
 
@@ -79,7 +81,7 @@ class QuotaRepositoryImplTest {
 
     @Before
     fun setUp() {
-        repo = QuotaRepositoryImpl(accountDao, quotaDao, eventDao, historyRepository, providerRegistry)
+        repo = QuotaRepositoryImpl(accountDao, quotaDao, eventDao, historyRepository, providerRegistry, credentialStore)
         coEvery { accountDao.getById("acc1") } returns accountEntity
         every { providerRegistry.getProvider("glm") } returns provider
         coEvery { quotaDao.upsertSnapshot(any()) } just runs

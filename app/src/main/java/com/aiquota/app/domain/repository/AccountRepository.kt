@@ -16,4 +16,7 @@ interface AccountRepository {
     suspend fun attachCredential(accountId: String, credential: ProviderCredential)
     suspend fun readCredential(accountId: String): ProviderCredential?
     suspend fun testConnection(account: ProviderAccount): AuthResult
+
+    /** 在保存账号前，直接用输入的凭据测试连接（无需先落库账号）。 */
+    suspend fun testCredential(providerId: String, credential: ProviderCredential): AuthResult
 }

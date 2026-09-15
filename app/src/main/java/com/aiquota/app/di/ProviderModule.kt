@@ -2,10 +2,12 @@ package com.aiquota.app.di
 
 import com.aiquota.app.core.network.NetworkFactory
 import com.aiquota.app.core.security.SecureCipherStore
+import com.aiquota.app.data.database.dao.QuotaDao
+import com.aiquota.app.data.repository.RoomCredentialStore
 import com.aiquota.app.domain.model.ProviderId
+import com.aiquota.app.domain.repository.CredentialStore
 import com.aiquota.app.domain.repository.QuotaProvider
 import com.aiquota.app.provider.ProviderRegistry
-import com.aiquota.app.provider.bridge.BridgeConnection
 import com.aiquota.app.provider.bridge.BridgeQuotaProvider
 import com.aiquota.app.provider.debug.DebugQuotaProvider
 import com.aiquota.app.provider.unavailable.UnavailableQuotaProvider
@@ -16,14 +18,17 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 /**
- * Provider DI。Bridge 平台的 url + secret 全部通过 SecureCipherStore 按账号加密读取，
- * 不写死、不落明文；未配置桥接的账号返回 null -> BridgeOffline。
+ * Provider DI。
+ *
+ * 凭据统一由 [CredentialStore]（CredentialEntity + SecureCipherStore）保存/读取，
+ * 并在查询时由 QuotaRepository 解密后通过 ProviderExecutionContext 注入 Provider。
+ * 本模块禁止自行用任何前缀生成 key 去读 SecureCipherStore。
+ *
+ * Provider 只负责拿到账号 + 凭据后执行真实查询，不反向依赖 Repository。
  */
 @Module
 @InstallIn(SingletonComponent::class)
 object ProviderModule {
-
-    private const val BRIDGE_PREFIX = "bridge:" // 加密对象命名空间
 
     @Provides
     @Singleton
@@ -31,35 +36,28 @@ object ProviderModule {
 
     @Provides
     @Singleton
-    fun provideProviderRegistry(secureCipherStore: SecureCipherStore): ProviderRegistry {
-        val secretLoader: suspend (accountId: String) -> BridgeConnection? = { accountId ->
-            val blob = secureCipherStore.decrypt(BRIDGE_PREFIX + accountId, BRIDGE_PREFIX)
-            // blob = "<url>\n<secret>"
-            blob?.split("\n", limit = 2)
-                ?.map { it.trim() }
-                ?.let { parts ->
-                    val url = parts.firstOrNull()?.takeIf { it.isNotBlank() } ?: return@let null
-                    BridgeConnection(url = url, secret = parts.getOrNull(1)?.takeIf { it.isNotBlank() })
-                }
-        }
+    fun provideCredentialStore(
+        quotaDao: QuotaDao,
+        secureCipherStore: SecureCipherStore
+    ): CredentialStore = RoomCredentialStore(quotaDao, secureCipherStore)
+
+    @Provides
+    @Singleton
+    fun provideProviderRegistry(): ProviderRegistry {
         val codex = BridgeQuotaProvider(
             providerId = ProviderId.OPENAI_CODEX.key,
-            secretLoader = secretLoader,
             httpClient = NetworkFactory.buildHttpClient()
         )
         val glm = BridgeQuotaProvider(
             providerId = ProviderId.GLM.key,
-            secretLoader = secretLoader,
             httpClient = NetworkFactory.buildHttpClient()
         )
         val minimax = BridgeQuotaProvider(
             providerId = ProviderId.MINIMAX.key,
-            secretLoader = secretLoader,
             httpClient = NetworkFactory.buildHttpClient()
         )
         val opencode = BridgeQuotaProvider(
             providerId = ProviderId.OPENCODE_GO.key,
-            secretLoader = secretLoader,
             httpClient = NetworkFactory.buildHttpClient()
         )
         val grok = UnavailableQuotaProvider(providerId = ProviderId.GROK.key)

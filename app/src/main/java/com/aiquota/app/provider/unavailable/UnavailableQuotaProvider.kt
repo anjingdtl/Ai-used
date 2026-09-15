@@ -2,9 +2,9 @@ package com.aiquota.app.provider.unavailable
 
 import com.aiquota.app.domain.model.AuthResult
 import com.aiquota.app.domain.model.CredentialType
-import com.aiquota.app.domain.model.ProviderAccount
 import com.aiquota.app.domain.model.ProviderCapabilities
 import com.aiquota.app.domain.model.ProviderCredential
+import com.aiquota.app.domain.model.ProviderExecutionContext
 import com.aiquota.app.domain.model.QueryError
 import com.aiquota.app.domain.model.QuotaSnapshot
 import com.aiquota.app.domain.repository.QuotaProvider
@@ -20,7 +20,7 @@ class UnavailableQuotaProvider(
     override suspend fun authenticate(credential: ProviderCredential): AuthResult =
         AuthResult.Failure(QueryError.ProviderUnavailable)
 
-    override suspend fun fetchQuota(account: ProviderAccount): QuotaSnapshot =
+    override suspend fun fetchQuota(context: ProviderExecutionContext): QuotaSnapshot =
         throw QueryError.ProviderUnavailable
 
     override suspend fun validateCredential(credential: ProviderCredential): Boolean = false

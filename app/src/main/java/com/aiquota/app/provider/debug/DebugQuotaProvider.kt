@@ -5,9 +5,9 @@ import com.aiquota.app.domain.model.AuthResult
 import com.aiquota.app.domain.model.Balance
 import com.aiquota.app.domain.model.CredentialType
 import com.aiquota.app.domain.model.DataSource
-import com.aiquota.app.domain.model.ProviderAccount
 import com.aiquota.app.domain.model.ProviderCapabilities
 import com.aiquota.app.domain.model.ProviderCredential
+import com.aiquota.app.domain.model.ProviderExecutionContext
 import com.aiquota.app.domain.model.QueryError
 import com.aiquota.app.domain.model.QuotaBucket
 import com.aiquota.app.domain.model.QuotaSnapshot
@@ -48,7 +48,8 @@ class DebugQuotaProvider : QuotaProvider {
     override suspend fun authenticate(credential: ProviderCredential): AuthResult =
         AuthResult.Success("Debug 已连接")
 
-    override suspend fun fetchQuota(account: ProviderAccount): QuotaSnapshot {
+    override suspend fun fetchQuota(context: ProviderExecutionContext): QuotaSnapshot {
+        val account = context.account
         val scenario = MockScenario.from(accountCredentialScenario[account.id] ?: "61")
         when (scenario) {
             MockScenario.NETWORK_ERROR -> throw IOException("simulated network").toQueryError()

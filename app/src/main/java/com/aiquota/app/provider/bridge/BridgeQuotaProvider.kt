@@ -6,9 +6,9 @@ import com.aiquota.app.domain.model.AuthResult
 import com.aiquota.app.domain.model.Balance
 import com.aiquota.app.domain.model.CredentialType
 import com.aiquota.app.domain.model.DataSource
-import com.aiquota.app.domain.model.ProviderAccount
 import com.aiquota.app.domain.model.ProviderCapabilities
 import com.aiquota.app.domain.model.ProviderCredential
+import com.aiquota.app.domain.model.ProviderExecutionContext
 import com.aiquota.app.domain.model.QueryError
 import com.aiquota.app.domain.model.QuotaBucket
 import com.aiquota.app.domain.model.QuotaSnapshot
@@ -23,11 +23,11 @@ import java.util.UUID
 /**
  * 通用 Bridge Provider。用于无法从 Android 直接调用官方 API，
  * 但可通过本地 CLI / Dashboard 查询的厂商（Codex / OpenCode / GLM / MiniMax）。
- * bridge url + secret 由安全存储按账号注入（不写死、不落明文）。
+ * bridge url + secret 由上层通过 [ProviderExecutionContext.credential] 解密注入，
+ * 本 Provider 不自行访问任何 Repository/SecureCipherStore。
  */
 class BridgeQuotaProvider(
     override val providerId: String,
-    private val secretLoader: suspend (accountId: String) -> BridgeConnection?,
     private val httpClient: OkHttpClient = NetworkFactory.buildHttpClient()
 ) : QuotaProvider {
 
@@ -44,13 +44,14 @@ class BridgeQuotaProvider(
         }
     }
 
-    override suspend fun fetchQuota(account: ProviderAccount): QuotaSnapshot {
-        val conn = secretLoader(account.id) ?: throw QueryError.BridgeOffline
+    override suspend fun fetchQuota(context: ProviderExecutionContext): QuotaSnapshot {
+        val account = context.account
+        val conn = context.credential?.let { bridgeConnection(it) } ?: throw QueryError.BridgeOffline
         val client = BridgeClient(conn.url, httpClient)
         val quota = try {
             client.quota(conn.secret ?: "", provider = providerId, accountId = account.id)
         } catch (e: com.aiquota.app.provider.bridge.BridgeProtocolException) {
-            throw QueryError.BridgeOffline
+            throw mapBridgeError(e)
         } catch (e: QueryError) {
             throw e
         } catch (e: Exception) {
@@ -103,6 +104,21 @@ class BridgeQuotaProvider(
         credentialTypes = listOf(CredentialType.BRIDGE)
     )
 
+    /**
+     * 把 Bridge 协议层的 HTTP 状态码映射为明确的三方 / 服务端错误，
+     * 避免把所有协议异常一律归为 BridgeOffline。
+     * 例：401 → Unauthorized，429 → RateLimited，500 → ServerError。
+     */
+    private fun mapBridgeError(e: BridgeProtocolException): QueryError {
+        val code = REGEX_CODE.find(e.message.orEmpty())?.groupValues?.getOrNull(1)?.toIntOrNull()
+        return when (code) {
+            401, 403 -> QueryError.Unauthorized("Bridge 返回 $code")
+            429 -> QueryError.RateLimited()
+            in 500..599 -> QueryError.ServerError(code)
+            else -> QueryError.BridgeOffline
+        }
+    }
+
     private fun bridgeConnection(c: ProviderCredential): BridgeConnection? {
         val url = c.extra["bridgeUrl"]
             .takeIf { !it.isNullOrBlank() }
@@ -119,3 +135,5 @@ class BridgeQuotaProvider(
 }
 
 data class BridgeConnection(val url: String, val secret: String?)
+
+private val REGEX_CODE = Regex("=(\\d{3})$")
