@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置（DEBUG 覆盖，仅 debug 构建生效）。
+  debug 构建允许局域网明文 HTTP，供连桌面 Bridge（http://<LAN-IP>:8787）自测。
+  Release 使用 src/main 的配置（默认禁止公网明文）。
+  该文件位于 src/debug，不会被打进 Release APK。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

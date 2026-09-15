@@ -22,7 +22,8 @@ data class ProviderCredential(
 /** 鉴权结果 */
 sealed class AuthResult {
     data class Success(val planName: String? = null) : AuthResult()
-    data class Failure(val error: QueryError) : AuthResult()
+    /** [detail] 为可选的、面向用户的中文细因，比 [error.userMessage] 更精确（如“Bridge 在线 · GLM Adapter 未配置 Token”） */
+    data class Failure(val error: QueryError, val detail: String? = null) : AuthResult()
 }
 
 /** 平台能力声明 */

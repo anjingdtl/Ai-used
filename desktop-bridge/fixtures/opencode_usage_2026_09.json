@@ -1,0 +1,10 @@
+{
+  "_provenance": {
+    "date": "2026-09-15",
+    "source": "OpenCode 官方控制台源码(subscription.get 返回 rollingUsage/weeklyUsage/usagePercent/resetInSec) 与 CodexBar opencode provider 解析文档一致",
+    "note": "顶层分 rollingUsage/weeklyUsage/monthlyUsage 三档；每档 {usagePercent, resetInSec}；usagePercent 0-100；resetInSec 为相对秒偏移(如 1200=从现在起1200秒)，解析须转换绝对 ISO-UTC，禁止把数字塞进 resetAt"
+  },
+  "rollingUsage": {"usagePercent": 32.0, "resetInSec": 1200},
+  "weeklyUsage": {"usagePercent": 53.0, "resetInSec": 3600},
+  "monthlyUsage": {"usagePercent": 11.0, "resetInSec": 86400}
+}

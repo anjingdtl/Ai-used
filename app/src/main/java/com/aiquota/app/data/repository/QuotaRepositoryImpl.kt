@@ -116,7 +116,9 @@ class QuotaRepositoryImpl @Inject constructor(
             val snapshot = try {
                 provider.fetchQuota(context)
             } catch (e: QueryError.ProviderUnavailable) {
-                recordSync(accountId, SyncStatus.UNAVAILABLE, QueryError.ProviderUnavailable)
+                // P0-3：platform 未开放接口（含 Bridge unsupported）—— 有旧数据保留并标记 CACHED，
+                // 无旧数据标记 UNAVAILABLE。绝不能因 Provider 返回空/不支持就清空旧快照。
+                recordSync(accountId, if (hadCache) SyncStatus.CACHED else SyncStatus.UNAVAILABLE, QueryError.ProviderUnavailable)
                 return
             } catch (e: QueryError) {
                 recordSync(accountId, if (hadCache) SyncStatus.CACHED else SyncStatus.FAILED_NO_CACHE, e)

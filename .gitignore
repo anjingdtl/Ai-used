@@ -23,3 +23,7 @@ signing.properties
 /captures
 .cxx/
 /clound
+
+# Python
+__pycache__/
+*.py[cod]

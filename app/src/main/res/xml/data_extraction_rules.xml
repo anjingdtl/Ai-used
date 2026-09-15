@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  云备份 / 跨设备迁移的数据提取规则（Android 12+）。
+  安全性优先（P1-6）：账号凭据与加密 blob 都存放在同一 Room 库 ai_quota.db 内，
+  因此整个库从云备份与 device-to-device 迁移中排除，保证敏感数据绝不自动上传。
+  其余（设置、DataStore 等）仍按默认备份。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="ai_quota.db"/>
+        <exclude domain="database" path="ai_quota.db-journal"/>
+        <exclude domain="database" path="ai_quota.db-wal"/>
+        <exclude domain="database" path="ai_quota.db-shm"/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="ai_quota.db"/>
+        <exclude domain="database" path="ai_quota.db-journal"/>
+        <exclude domain="database" path="ai_quota.db-wal"/>
+        <exclude domain="database" path="ai_quota.db-shm"/>
+    </device-transfer>
+</data-extraction-rules>

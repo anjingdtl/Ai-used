@@ -1,17 +1,33 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Bridge 适配器的 fixture 自测：不联网，直接喂真实形状的响应做解析验证。
+"""Bridge 适配器的 fixture 自测：不联网，直接喂 fixtures/ 里的真实形状响应做解析验证。
 
 运行：python3 bridge_self_test.py
 全部通过则退出码 0；任一失败打印并可退出码非 0（供 CI 使用）。
+
+覆盖：
+  * GLM / MiniMax / OpenCode 解析
+  * 统一协议 WindowType 契约（输出必须能被 Android WindowType.valueOf 成功解析）
+  * OpenCode resetInSec -> ISO-8601 UTC（绝不允许把 1200 塞进 resetAt）
 """
-import ast
 import json
 import os
+import re
 import sys
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bridge  # noqa: E402
+
+FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
+
+# 与 Android WindowType 枚举一一对应的协议常量
+PROTOCOL_WINDOWS = {
+    "ROLLING", "ROLLING_5_HOURS", "DAILY", "WEEKLY", "MONTHLY",
+    "CREDIT", "BALANCE", "TOKEN", "REQUEST_COUNT", "CUSTOM", "UNKNOWN",
+}
+
+_ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
 
 
 class _FakeResp:
@@ -25,63 +41,77 @@ class _FakeResp:
         return json.dumps(self._payload).encode("utf-8")
 
 
-# monkeypatch urllib so适配器走本地 fixture，不发真实网络
-def _patch_http_get(payload):
-    bridge._http_get = lambda url, headers, timeout=20: _FakeResp() if False else payload
+def _load(name):
+    with open(os.path.join(FIXTURES, name), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _patch(payload):
+    def _fake(url, headers, timeout=20):
+        return payload
+    bridge._http_get = _fake
     return payload
 
 
-def _make(url, headers, timeout=20):
-    return _FakeResp()
+def _assert_protocol_windows(buckets):
+    for b in buckets:
+        window = b.get("windowType")
+        assert window in PROTOCOL_WINDOWS, f"windowType {window!r} 不在协议集合: {b}"
+        assert window not in ("5H", "ROLLING_5H", "WEEK", "MONTH"), f"非法别名 {window}"
+        reset = b.get("resetAt")
+        if reset is not None:
+            assert _ISO_RE.match(reset) or reset.endswith("Z"), f"resetAt 非 ISO-UTC: {reset}"
 
 
 def run_glm():
-    payload = {"data": {"limits": [
-        {"type": "TOKENS_LIMIT", "unit": 3, "percentage": 37.0, "resetAt": "2026-09-15T03:00:00Z"},
-        {"type": "TOKENS_LIMIT", "unit": 4, "percentage": 15.0, "resetAt": None},
-        {"type": "TIME_LIMIT", "unit": 4, "percentage": 8.0, "currentValue": 12, "usage": 150},
-    ]}}
-    bridge._http_get = _make
-    _patch_http_get(payload)
-    a = bridge.GlmAdapter()
-    out = a.fetch("acc1")
+    payload = _load("glm_quota_2026_09.json")
+    _patch(payload)
+    out = bridge.GlmAdapter().fetch("acc1")
     assert out["source"] == "bridge", out
     assert len(out["buckets"]) == 2, out  # TOKENS 5H + TOKENS 周去重合并 TIME
     assert out["buckets"][0]["usedPercent"] == 37.0, out
-    print("  GLM parse OK:", [(b["id"], b["usedPercent"]) for b in out["buckets"]])
+    assert out["buckets"][0]["windowType"] == "ROLLING_5_HOURS", out
+    assert out["buckets"][1]["windowType"] == "WEEKLY", out
+    _assert_protocol_windows(out["buckets"])
+    print("  GLM parse OK:", [(b["id"], b["windowType"], b["usedPercent"]) for b in out["buckets"]])
 
 
 def run_minimax():
-    payload = {"remaining_percent": 63.0, "plan": "Token Plan", "window": "rolling"}
-    bridge._http_get = _make
-    _patch_http_get(payload)
+    payload = _load("minimax_token_plan_2026_09.json")
+    _patch(payload)
     out = bridge.MiniMaxAdapter().fetch("acc2")
     assert out["source"] == "bridge", out
     assert out["buckets"][0]["usedPercent"] == 37.0, out  # 100 - 63
     assert out["buckets"][0]["remainingPercent"] == 63.0, out
-    print("  MiniMax parse OK:", out["buckets"][0]["usedPercent"])
+    _assert_protocol_windows(out["buckets"])
+    print("  MiniMax parse OK:", [(b["id"], b["windowType"], b["usedPercent"]) for b in out["buckets"]])
 
 
 def run_opencode():
-    payload = {
-        "rollingUsage": {"usagePercent": 32.0, "resetInSec": 1200},
-        "weeklyUsage": {"usagePercent": 53.0, "resetInSec": 3600},
-        "monthlyUsage": {"usagePercent": 11.0, "resetInSec": 86400},
-    }
-    bridge._http_get = _make
-    _patch_http_get(payload)
+    payload = _load("opencode_usage_2026_09.json")
+    _patch(payload)
+    before = datetime.now(timezone.utc).timestamp()
     out = bridge.OpenCodeAdapter().fetch("acc3")
+    after = datetime.now(timezone.utc).timestamp()
     assert out["source"] == "bridge", out
     assert len(out["buckets"]) == 3, out
     assert out["buckets"][0]["usedPercent"] == 32.0, out
-    print("  OpenCode parse OK:", [(b["id"], b["usedPercent"]) for b in out["buckets"]])
+    _assert_protocol_windows(out["buckets"])
+    # resetInSec -> ISO-UTC：rolling(1200s) 必须落在 now+1200 附近
+    rolling = out["buckets"][0]
+    assert rolling["resetAt"], f"rolling resetAt 为空: {out}"
+    reset_ts = datetime.fromisoformat(rolling["resetAt"].replace("Z", "+00:00")).timestamp()
+    assert before + 1190 <= reset_ts <= after + 1210, f"reset 应为 now+1200s: {rolling['resetAt']}"
+    assert out["buckets"][1]["windowType"] == "WEEKLY"
+    assert out["buckets"][2]["windowType"] == "MONTHLY"
+    print("  OpenCode parse OK:", [(b["id"], b["windowType"], b["usedPercent"]) for b in out["buckets"]])
+    print("  OpenCode reset OK:", rolling["resetAt"], "(= now + 1200s)")
 
 
 def main():
     os.environ.setdefault("AIQUOTA_GLM_TOKEN", "sk-test-glm")
     os.environ.setdefault("AIQUOTA_MINIMAX_KEY", "sk-test-minimax")
     os.environ.setdefault("AIQUOTA_OPENCODE_KEY", "sk-test-opencode")
-    bridge._http_get = _make
     run_glm()
     run_minimax()
     run_opencode()

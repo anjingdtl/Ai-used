@@ -174,9 +174,105 @@ def _bucket(
         "usedPercent": pct,
         "remainingPercent": (100.0 - pct) if pct is not None else None,
         "unit": "%",
-        "windowType": (str(window) if window else "CUSTOM").upper(),
-        "resetAt": reset_at,
+        "windowType": _norm_window(window),
+        "resetAt": _resolve_reset(reset_at),
     }
+
+
+# --------------------------------------------------------------------------- #
+# Bridge 协议 WindowType 统一契约（与 Android WindowType 枚举一一对应）
+# --------------------------------------------------------------------------- #
+# 禁止 Adapter 自行创造 5H / ROLLING_5H / WEEK / MONTH 等别名。
+# Android 侧：WindowType.valueOf(windowType) 必须能解析成功。
+_WINDOW_ROLLING = "ROLLING"
+_WINDOW_5H = "ROLLING_5_HOURS"
+_WINDOW_DAILY = "DAILY"
+_WINDOW_WEEKLY = "WEEKLY"
+_WINDOW_MONTHLY = "MONTHLY"
+_WINDOW_CREDIT = "CREDIT"
+_WINDOW_BALANCE = "BALANCE"
+_WINDOW_TOKEN = "TOKEN"
+_WINDOW_REQUEST_COUNT = "REQUEST_COUNT"
+_WINDOW_CUSTOM = "CUSTOM"
+_WINDOW_UNKNOWN = "UNKNOWN"
+
+# Android 之外的旧别名 -> 协议常量；未识别一律 CUSTOM
+_WINDOW_ALIASES = {
+    "5H": _WINDOW_5H,
+    "ROLLING_5H": _WINDOW_5H,
+    "ROLLING5H": _WINDOW_5H,
+    "WEEK": _WINDOW_WEEKLY,
+    "MONTH": _WINDOW_MONTHLY,
+    "5HOURS": _WINDOW_5H,
+    "5_HOURS": _WINDOW_5H,
+}
+
+
+def _norm_window(window: Any) -> str:
+    if window is None:
+        return _WINDOW_CUSTOM
+    raw = str(window).strip().upper()
+    if raw in _WINDOW_ALIASES:
+        return _WINDOW_ALIASES[raw]
+    return raw if raw else _WINDOW_CUSTOM
+
+
+def _resolve_reset(reset_at: Any) -> Optional[str]:
+    """把 reset 统一归一为 ISO-8601 UTC（如 2026-09-15T10:20:30Z）。
+
+    输入可能为：
+    - 相对秒偏移（int/float/纯数字字符串）：OpenCode `resetInSec`（如 1200）——表示"现在起 N 秒"；
+    - 绝对秒时间戳（~1.7e9）：epoch 秒；
+    - 绝对毫秒时间戳（~1.7e12）：GLM `nextResetTime`——毫秒；
+    - ISO-8601 字符串：原样返回。
+    通过数值量级区分，避免把毫秒时间戳或绝対 epoch 秒误当成秒偏移。
+    无法解析返回 None，绝不返回原始数字字符串。
+    """
+    if reset_at is None:
+        return None
+    if isinstance(reset_at, bool):
+        return None
+    if isinstance(reset_at, (int, float)):
+        return _resolve_numeric_reset(float(reset_at))
+    s = str(reset_at).strip()
+    if not s:
+        return None
+    try:
+        return _resolve_numeric_reset(float(s))
+    except ValueError:
+        pass
+    return s if _looks_iso(s) else None
+
+
+def _resolve_numeric_reset(v: float) -> Optional[str]:
+    """按数值量级把 reset 转 ISO-UTC：>1e11 毫秒时间戳；>1e8 秒时间戳；否则相对秒偏移。"""
+    if v > 1e11:      # 毫秒时间戳，如 GLM nextResetTime = 1787563232239
+        return _iso_from_epoch_ms(v)
+    if v > 1e8:       # 秒时间戳（未来绝对 epoch）
+        return _iso_from_epoch_sec(v)
+    if v < 0:
+        return None
+    return _iso_from_now_seconds(v)  # 相对秒偏移，如 OpenCode resetInSec
+
+
+def _iso_from_epoch_sec(sec: float) -> str:
+    return datetime.fromtimestamp(sec, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _looks_iso(s: str) -> bool:
+    try:
+        datetime.fromisoformat(s)
+        return True
+    except ValueError:
+        return False
+
+
+def _iso_from_now_seconds(sec: float) -> str:
+    return (datetime.now(timezone.utc) + __import__("datetime").timedelta(seconds=sec)).isoformat().replace("+00:00", "Z")
+
+
+def _iso_from_epoch_ms(ms: float) -> str:
+    return datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _plan_from(key: str) -> str:
@@ -187,7 +283,24 @@ def _plan_from(key: str) -> str:
 
 
 class GlmAdapter(KeyProviderAdapter):
-    """智谱 GLM Coding Plan —— 官方稳定用量接口（api.z.ai 用量监控）。"""
+    """智谱 GLM Coding Plan —— 官方稳定用量接口。
+
+    真实结构（2026-09 核对，见 fixtures/glm_quota_2026_09.json 来源说明）：
+      GET https://api.z.ai/api/monitor/usage/quota/limit
+      Authorization: <订阅密钥>（裸 token，无 Bearer）
+      返回:
+        { "code":200, "msg":..., "success":true,
+          "data": { "level":"max",
+                    "limits":[ { "type":"CREDIT_LIMIT", "unit":3, "number":5,
+                                 "usage":28000, "currentValue":10360, "remaining":17640,
+                                 "percentage":37, "nextResetTime":1787563232239 }, ... ] } }
+    字段语义：
+      * percentage：已耗百分比（0–100 整数，绝对值的近似投影）；
+      * usage / currentValue / remaining：窗口总额度 / 已耗 / 剩余（绝对值）；
+      * nextResetTime：下次重置时间，毫秒级 Unix 时间戳（不是 resetAt / reset_at）；
+      * unit：3 -> 5 小时滚动窗口，6 -> 每周（7 天）窗口（多源一致归纳，官方无公开枚举）。
+    本解析器优先用绝对值 remaining/usage 反算已耗百分比，避免只依赖被舍入的 percentage。
+    """
 
     name = "glm"
     label = "智谱 GLM Coding Plan（官方用量接口）"
@@ -198,22 +311,39 @@ class GlmAdapter(KeyProviderAdapter):
             "https://api.z.ai/api/monitor/usage/quota/limit",
             {"Authorization": key, "Content-Type": "application/json"},
         )
-        limits = (payload.get("data") or {}).get("limits") or payload.get("limits") or []
+        data = payload.get("data") if isinstance(payload, dict) else None
+        limits = ((data.get("limits") if isinstance(data, dict) else None)
+                  or payload.get("limits")) or []
         if not limits:
-            return self._unsupported(account_id, "响应缺少 limits 字段")
+            return self._unsupported(account_id, "响应缺少 data.limits 字段")
         buckets = []
         seen = set()
         for item in limits:
+            if not isinstance(item, dict):
+                continue
             unit = item.get("unit")
-            window = "5H" if unit == 3 else "WEEKLY" if unit == 4 else "CUSTOM"
+            # unit=3 -> 5小时滚动；unit=6 -> 每周(7 天)；其它不臆测，统一 CUSTOM
+            if unit == 3:
+                window = _WINDOW_5H
+            elif unit == 6:
+                window = _WINDOW_WEEKLY
+            else:
+                window = _WINDOW_CUSTOM
             if window in seen:
                 continue
             seen.add(window)
+            pct = item.get("percentage")
+            remaining = item.get("remaining")
+            total = item.get("usage")
+            # 有绝对值时用 remaining/usage 精确反算已耗百分比
+            if (isinstance(remaining, (int, float))
+                    and isinstance(total, (int, float)) and total):
+                pct = 100.0 * (float(total) - float(remaining)) / float(total)
             buck = _bucket(
                 "glm-" + window.lower(),
                 f"积分（{window}）",
-                item.get("percentage"),
-                item.get("resetAt") or item.get("reset_at"),
+                pct,
+                item.get("nextResetTime"),
                 window,
             )
             buckets.append(buck)
@@ -265,7 +395,7 @@ class MiniMaxAdapter(KeyProviderAdapter):
                             "滚动用量",
                             _coerce_pct(payload, "rolling", "rollingUsage"),
                             _first(payload, "rolling_reset_at", "rollingResetAt"),
-                            "ROLLING_5H",
+                            _WINDOW_5H,
                         )
                         if _coerce_pct(payload, "rolling", "rollingUsage") is not None
                         else _bucket(
@@ -349,22 +479,28 @@ class OpenCodeAdapter(KeyProviderAdapter):
             "https://opencode.ai/zen/go/v1/usage",
             {"Authorization": "Bearer " + key},
         )
-        buckets = []
-        rolling = _pct_value(_coerce_pct(payload, "rollingUsage", "rolling"))
-        if rolling is not None:
-            reset_sec = None
-            rv = _coerce_pct(payload, "rollingUsage", "rolling")
-            if isinstance(rv, dict):
-                reset_sec = rv.get("resetInSec") or rv.get("resetAt")
-            buckets.append(
-                _bucket("opencode-5h", "滚动 5 小时", rolling, reset_sec, "ROLLING_5H")
+
+        def _bucket_for(name: str, id_suffix: str, usages: List[str], window: str) -> Optional[Dict[str, Any]]:
+            v = _coerce_pct(payload, *usages)
+            pct = _pct_value(v)
+            if pct is None:
+                return None
+            reset_raw = None
+            if isinstance(v, dict):
+                reset_raw = v.get("resetInSec") or v.get("resetAt") or v.get("resetAtMs")
+            return _bucket(
+                "opencode-" + id_suffix, name, pct, reset_raw, window
             )
-        weekly = _pct_value(_coerce_pct(payload, "weeklyUsage", "weekly"))
-        if weekly is not None:
-            buckets.append(_bucket("opencode-weekly", "本周额度", weekly, None, "WEEKLY"))
-        monthly = _pct_value(_coerce_pct(payload, "monthlyUsage", "monthly"))
-        if monthly is not None:
-            buckets.append(_bucket("opencode-monthly", "本月额度", monthly, None, "MONTHLY"))
+
+        buckets = []
+        for name, s, usages, window in (
+            ("滚动 5 小时", "5h", ("rollingUsage", "rolling"), _WINDOW_5H),
+            ("本周额度", "weekly", ("weeklyUsage", "weekly"), _WINDOW_WEEKLY),
+            ("本月额度", "monthly", ("monthlyUsage", "monthly"), _WINDOW_MONTHLY),
+        ):
+            buck = _bucket_for(name, s, usages, window)
+            if buck is not None:
+                buckets.append(buck)
         if not buckets:
             return self._unsupported(account_id, "响应缺少用量百分比字段")
         return {
@@ -507,7 +643,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self._send(404, {"error": "unknown provider"})
                 return
             if not adapter.available():
-                self._send(200, adapter._unsupported("provider 未就绪"))
+                self._send(200, adapter._unsupported(account_id, "provider 未就绪"))
                 return
             self._send(200, adapter.fetch(account_id))
             return

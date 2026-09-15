@@ -21,6 +21,9 @@ class OnboardingViewModel @Inject constructor(
 
     /** 用户点击「开始使用」，持久化标记，后续冷启动直达主页。 */
     fun markCompleted() {
-        viewModelScope.launch { settingsRepository.markOnboardingCompleted() }
+        viewModelScope.launch { markCompletedSuspended() }
     }
+
+    /** 完成标记并**等待** DataStore 落盘后再返回（P1-5）。避免 app 在写入完成前被杀导致下次仍进引导页。 */
+    suspend fun markCompletedSuspended() = settingsRepository.markOnboardingCompleted()
 }

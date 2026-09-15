@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Full Backup 规则（Android 11 及以下）。
+  与 data_extraction_rules 对齐：排除含凭据与加密 blob 的整个 Room 数据库。
+  （Android 12+ 忽略此文件，使用 data_extraction_rules.xml。）
+-->
+<full-backup-content>
+    <exclude domain="database" path="ai_quota.db"/>
+    <exclude domain="database" path="ai_quota.db-journal"/>
+    <exclude domain="database" path="ai_quota.db-wal"/>
+    <exclude domain="database" path="ai_quota.db-shm"/>
+</full-backup-content>

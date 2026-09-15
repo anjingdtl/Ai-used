@@ -119,8 +119,12 @@ fun OnboardingScreen(
 
             Button(
                 onClick = {
-                    viewModel.markCompleted()
-                    onStart()
+                    // P1-5：先等待 DataStore 写入完成，再导航；避免写入前被杀导致下次仍进引导页
+                    val scope = rememberCoroutineScope()
+                    scope.launch {
+                        viewModel.markCompletedSuspended()
+                        onStart()
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()

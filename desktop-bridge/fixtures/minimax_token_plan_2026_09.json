@@ -1,0 +1,12 @@
+{
+  "_provenance": {
+    "date": "2026-09-15",
+    "source": "官方端点 GET https://www.minimaxi.com/v1/token_plan/remains，Authorization: Bearer <Token Plan订阅Key>",
+    "note": "⚠️ 官方文档仅提供 curl 示例，未公开 JSON schema；字段级结构 UNVERIFIED。当前 fixture 仅代表『5小时+每周双窗口、remaining% 语义』的宏观结构，字段名须以一次真实抓包为准。解析器找不到必需字段时返回 unsupported，绝不伪造成功。"
+  },
+  "remaining_percent": 63.0,
+  "used_percent": 37.0,
+  "remaining": 63.0,
+  "plan": "Token Plan",
+  "window_type": "rolling"
+}

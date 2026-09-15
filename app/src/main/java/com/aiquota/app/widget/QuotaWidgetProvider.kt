@@ -1,9 +1,13 @@
 package com.aiquota.app.widget
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.widget.RemoteViews
+import com.aiquota.app.MainActivity
 import com.aiquota.app.R
 import com.aiquota.app.domain.repository.QuotaRepository
 import com.aiquota.app.ui.util.Format
@@ -17,7 +21,12 @@ import javax.inject.Inject
 
 /**
  * 桌面小组件：展示「当前最低的关键额度百分比」。
- * 数据直接取自本地缓存（Last Known Good），断网同样可显示；同步成功后也会刷新。
+ *
+ * Lifctime（P1-4）：
+ *  - 使用 [goAsync] + [android.appwidget.AppWidgetProvider] 的 PendingResult，保证
+ *    onReceive 返回后协程仍在执行、并在 finally 中 finish()，杜绝"new Scope 后立即返回"的脆弱写法；
+ *  - 数据只读 Last Known Good（本地 Room 缓存），断网同样显示，不直接联网；
+ *  - 点击打开 [MainActivity]。
  */
 @AndroidEntryPoint
 class QuotaWidgetProvider : AppWidgetProvider() {
@@ -32,48 +41,74 @@ class QuotaWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        for (id in appWidgetIds) {
-            appWidgetManager.updateAppWidget(id, RemoteViews(context.packageName, R.layout.widget_quota))
-            renderLoading(context, appWidgetManager, id)
-        }
-        refreshAsync(context, appWidgetManager, appWidgetIds)
-    }
-
-    private fun refreshAsync(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray
-    ) {
+        if (appWidgetIds.isEmpty()) return
+        val pending = goAsync()
         scope.launch {
-            val min = runCatching {
-                quotaRepository.observeEnabledStates().first()
-                    .mapNotNull { it.snapshot?.minRemainingPercent }
-                    .minOrNull()
-            }.getOrNull()
-
-            for (id in appWidgetIds) {
-                val views = RemoteViews(context.packageName, R.layout.widget_quota)
-                val percent = if (min == null) "--" else Format.percent(min)
-                views.setTextViewText(R.id.widget_percent, percent)
-                views.setTextViewText(R.id.widget_subtitle, subtitleFor(min, context))
-                appWidgetManager.updateAppWidget(id, views)
+            try {
+                renderAll(context, appWidgetManager, appWidgetIds)
+            } finally {
+                pending.finish()
             }
         }
     }
 
-    private fun subtitleFor(minPct: Double?, context: Context): String =
-        if (minPct == null) context.getString(R.string.widget_none)
-        else context.getString(R.string.widget_lowest)
+    override fun onReceive(context: Context?, intent: Intent?) {
+        super.onReceive(context, intent)
+        if (intent?.action == ACTION_UPDATE && context != null) {
+            val mgr = AppWidgetManager.getInstance(context)
+            val ids = mgr.getAppWidgetIds(ComponentName(context, QuotaWidgetProvider::class.java))
+            if (ids.isNotEmpty()) {
+                val pending = goAsync()
+                scope.launch {
+                    try {
+                        renderAll(context, mgr, ids)
+                    } finally {
+                        pending.finish()
+                    }
+                }
+            }
+        }
+    }
 
-    private fun renderLoading(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        id: Int
-    ) {
+    private suspend fun renderAll(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val snapshot = quotaRepository.observeEnabledStates().first()
+            .mapNotNull { it.snapshot }
+            .minByOrNull { it.minRemainingPercent ?: Double.MAX_VALUE }
+        val base = baseViews(context)
+        for (id in ids) {
+            val views = base.clone()
+            if (snapshot == null || snapshot.minRemainingPercent == null) {
+                views.setTextViewText(R.id.widget_percent, "--")
+                views.setTextViewText(
+                    R.id.widget_subtitle,
+                    context.getString(R.string.widget_none)
+                )
+            } else {
+                views.setTextViewText(R.id.widget_percent, Format.percent(snapshot.minRemainingPercent))
+                views.setTextViewText(
+                    R.id.widget_subtitle,
+                    context.getString(
+                        R.string.widget_updated,
+                        snapshot.accountName,
+                        Format.relativeTime(snapshot.queriedAt)
+                    )
+                )
+            }
+            mgr.updateAppWidget(id, views)
+        }
+    }
+
+    /** 组装统一基础视图：点击打开主界面（只读缓存，不联网）。 */
+    private fun baseViews(context: Context): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_quota)
-        views.setTextViewText(R.id.widget_percent, "…")
-        views.setTextViewText(R.id.widget_subtitle, context.getString(R.string.widget_syncing))
-        appWidgetManager.updateAppWidget(id, views)
+        val open = PendingIntent.getActivity(
+            context,
+            0,
+            Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        views.setOnClickPendingIntent(R.id.widget_root, open)
+        return views
     }
 
     companion object {
@@ -83,24 +118,8 @@ class QuotaWidgetProvider : AppWidgetProvider() {
         @JvmStatic
         fun requestUpdate(context: Context) {
             context.sendBroadcast(
-                android.content.Intent(context, QuotaWidgetProvider::class.java)
-                    .setAction(ACTION_UPDATE)
+                Intent(context, QuotaWidgetProvider::class.java).setAction(ACTION_UPDATE)
             )
-        }
-    }
-
-    override fun onReceive(context: Context?, intent: android.content.Intent?) {
-        super.onReceive(context, intent)
-        if (intent?.action == ACTION_UPDATE && context != null) {
-            AppWidgetManager.getInstance(context).let { mgr ->
-                val ids = mgr.getAppWidgetIds(
-                    android.content.ComponentName(context, QuotaWidgetProvider::class.java)
-                )
-                if (ids.isNotEmpty()) {
-                    renderLoading(context, mgr, ids.first())
-                    refreshAsync(context, mgr, ids)
-                }
-            }
         }
     }
 }

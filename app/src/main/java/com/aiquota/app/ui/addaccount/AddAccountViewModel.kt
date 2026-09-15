@@ -76,7 +76,8 @@ class AddAccountViewModel @Inject constructor(
             val result = accountRepository.testCredential(providerId.key, credential)
             _testState.value = when (result) {
                 is AuthResult.Success -> ConnectionTestState.Success(result.planName)
-                is AuthResult.Failure -> ConnectionTestState.Failure(result.error.userMessage())
+                is AuthResult.Failure ->
+                    ConnectionTestState.Failure(result.detail ?: result.error.userMessage())
             }
         }
     }

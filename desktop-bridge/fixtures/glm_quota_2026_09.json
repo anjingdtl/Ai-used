@@ -1,0 +1,35 @@
+{
+  "_provenance": {
+    "date": "2026-09-15",
+    "source": "OmniRoute 适配文（2026-08 真实订阅响应示例）与 glm_usage.py 真实解析脚本一致结构；官方案例见 api.z.ai/api/monitor/usage/quota/limit",
+    "note": "topLevel = {code,msg,success,data:{level,limits[]}}; percentage=已耗%(绝对值投影); nextResetTime=毫秒时间戳; unit: 3=>5小时滚动, 6=>每周(7天)"
+  },
+  "code": 200,
+  "msg": "Operation successful",
+  "success": true,
+  "data": {
+    "level": "max",
+    "limits": [
+      {
+        "type": "CREDIT_LIMIT",
+        "unit": 3,
+        "number": 5,
+        "usage": 28000.0,
+        "currentValue": 10360.0,
+        "remaining": 17640.0,
+        "percentage": 37,
+        "nextResetTime": 1787563232239
+      },
+      {
+        "type": "CREDIT_LIMIT",
+        "unit": 6,
+        "number": 1,
+        "usage": 140000.0,
+        "currentValue": 21000.0,
+        "remaining": 119000.0,
+        "percentage": 15,
+        "nextResetTime": 1788077327998
+      }
+    ]
+  }
+}
