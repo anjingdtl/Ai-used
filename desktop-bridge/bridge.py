@@ -361,7 +361,16 @@ class GlmAdapter(KeyProviderAdapter):
 
 
 class MiniMaxAdapter(KeyProviderAdapter):
-    """MiniMax Token Plan —— 官方公开端点 /v1/token_plan/remains。"""
+    """MiniMax Token Plan —— 官方公开端点 /v1/token_plan/remains。
+
+    重要（P0-6）：官方文档仅提供 curl 示例，**未公开 JSON schema**（截至 2026-09，
+    见 fixtures/minimax_token_plan_2026_09.json 的 provenance 说明）。因此：
+      - **不**依赖单个 `remaining_percent` 之类猜测字段计算额度并默默成功；
+      - 仅在响应中出现**结构化窗口对象**（如 `rollingUsage` / `weeklyUsage`，内含
+        usagePercent + resetInSec/resetAt）时才解析为对应窗口的 QuotaBucket；
+      - 否则返回 `source="unsupported"`，绝不生成空 Bucket + LIVE。
+    待拿到一次真实脱敏抓包后再按真实结构固化解析。
+    """
 
     name = "minimax"
     label = "MiniMax Token Plan（官方 API）"
@@ -372,41 +381,74 @@ class MiniMaxAdapter(KeyProviderAdapter):
             "https://www.minimaxi.com/v1/token_plan/remains",
             {"Authorization": "Bearer " + key, "Content-Type": "application/json"},
         )
-        used = _first(payload, "used_percent", "percent_used", "usage_percent", "usedPercent")
-        remaining = _first(payload, "remaining_percent", "remain_percent", "remainingPercent")
-        window = _first(payload, "window_type", "window", "cycle")
-        reset_at = _first(payload, "reset_at", "next_reset", "reset_time", "resetAt")
-        if used is None and remaining is not None:
-            used = 100.0 - float(remaining)
-        pct = (100.0 - float(remaining)) if (used is None and remaining is not None) else used
-        if pct is None:
-            # 部分响应可能直接给 remaining 比例的数组，尽力取第一项
-            return self._unsupported(account_id, "响应缺少可解析的用量字段（结构可能变更）")
+        buckets = []
+
+        rolling = _window_object(payload, "rollingUsage", "rolling", "rolling_usage")
+        if rolling is not None:
+            buckets.append(
+                _bucket(
+                    "minimax-rolling_5_hours",
+                    "滚动用量（5小时）",
+                    _pct_value(rolling),
+                    _reset_of(rolling),
+                    _WINDOW_5H,
+                )
+            )
+
+        weekly = _window_object(payload, "weeklyUsage", "weekly", "week_usage")
+        if weekly is not None:
+            buckets.append(
+                _bucket(
+                    "minimax-weekly",
+                    "周用量",
+                    _pct_value(weekly),
+                    _reset_of(weekly),
+                    _WINDOW_WEEKLY,
+                )
+            )
+
+        if not buckets:
+            # 官方结构未确认，拒绝猜测解析（P0-6）
+            return self._unsupported(
+                account_id,
+                "官方 /v1/token_plan/remains 结构未公开；未识别到结构化窗口字段，拒绝猜测解析（需真实抓包确认）",
+            )
+
         return {
             "provider": self.name,
             "accountId": account_id,
             "accountName": "MiniMax Token Plan",
             "plan": "Token Plan",
-            "buckets": [
-                {
-                    **(
-                        _bucket(
-                            "minimax-rolling",
-                            "滚动用量",
-                            _coerce_pct(payload, "rolling", "rollingUsage"),
-                            _first(payload, "rolling_reset_at", "rollingResetAt"),
-                            _WINDOW_5H,
-                        )
-                        if _coerce_pct(payload, "rolling", "rollingUsage") is not None
-                        else _bucket(
-                            "minimax-cp", "Token Plan 额度", pct, reset_at, window
-                        )
-                    )
-                }
-            ],
+            "buckets": buckets,
             "queriedAt": _now_iso(),
             "source": "bridge",
         }
+
+
+def _window_object(payload: Dict[str, Any], *names: str) -> Any:
+    """从响应中提取『结构化窗口对象』（dict 形态，含 usagePercent + reset）。
+    仅返回 dict；裸数字/缺失返回 None，避免把单一猜测字段当成窗口。
+    """
+    if not isinstance(payload, dict):
+        return None
+    for n in names:
+        v = payload.get(n)
+        if isinstance(v, dict) and (_pct_value(v) is not None):
+            return v
+    return None
+
+
+def _reset_of(v: Any) -> Any:
+    """从窗口对象（或任意值）中取 reset 字段：resetInSec / resetAt / resetAtMs。"""
+    if isinstance(v, dict):
+        return (
+            v.get("resetInSec")
+            or v.get("resetAt")
+            or v.get("resetAtMs")
+            or v.get("nextResetTime")
+            or v.get("resetTime")
+        )
+    return v
 
 
 def _coerce_pct(payload: Dict[str, Any], *names: str) -> Any:

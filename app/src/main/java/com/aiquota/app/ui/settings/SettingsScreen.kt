@@ -24,7 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
+
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -71,22 +71,6 @@ fun SettingsScreen(
                             interval = settings.autoRefreshInterval,
                             onSelect = { viewModel.setRefreshIntervalMillis(it.durationMillis) }
                         )
-                    }
-                }
-            }
-
-            item {
-                Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
-                    Column(Modifier.fillMaxWidth()) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text("实时额度监控", style = MaterialTheme.typography.bodyLarge)
-                                Text("后台持续刷新并及时提醒额度变化", style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Switch(checked = settings.realtimeMonitoringEnabled,
-                                onCheckedChange = viewModel::setRealtimeMonitoring)
-                        }
                     }
                 }
             }

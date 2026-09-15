@@ -26,7 +26,9 @@ class NotificationRepositoryImpl(
     }
 
     override suspend fun evaluate(bucketId: String, threshold: Int, currentPercent: Double?) {
-        val recovered = currentPercent == null || currentPercent > threshold
+        // 保守策略：仅当前值非空且严格高于阈值才视为“恢复并清除”。
+        // null（未知额度）绝不当作恢复，避免在数据缺失时误清通知标记。
+        val recovered = currentPercent != null && currentPercent > threshold
         if (isNotified(bucketId, threshold) && recovered) {
             clearRecovery(bucketId)
         }

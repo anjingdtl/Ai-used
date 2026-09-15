@@ -25,17 +25,19 @@
 
 ## 支持的平台
 
-> 状态口径：**代码状态** = 仓库内实现到什么程度；**真实 E2E** = 是否已用真实账号 + 真实查询跑通端到端。
-> 直到用真实账号完成一次成功查询，任何平台都**不会**标记为「可查询」。
+> 状态口径（四级）：
+> **IMPLEMENTED** = 代码已按真实结构实现；**E2E_VERIFIED** = 已用真实账号跑通端到端；
+> **NEEDS_CREDENTIAL** = 实现就绪但未在真实账号上验证（code 侧缺真实 Token/密钥）；
+> **UNSUPPORTED** = 官方无可用额度接口，App 诚实标注，绝不伪造。
 
-| 平台 | 实现方式 | 代码状态 | 真实 E2E 状态 |
-| --- | --- | --- | --- |
-| ChatGPT / Codex | Android Bridge Provider + 桌面桥适配器 | 已实现（Bridge 协议就绪） | 未验收（需桌面 CLI 登录态/Tokey 且 Android 连接 Bridge） |
-| 智谱 GLM Coding Plan | Android Bridge Provider + 官方用量接口适配器 | 已实现 | 未验收（待真实账号 Token 验证） |
-| MiniMax Token / Coding Plan | Android Bridge Provider + 桌面桥适配器 | 已实现 | 未验收（待真实账号 Token 验证） |
-| OpenCode Go | Android Bridge Provider + 桌面桥适配器 | 已实现 | 未验收（待真实账号 Token 验证） |
-| Grok / xAI | Unavailable 占位 Provider | 已实现（后端明确不提供额度接口） | 官方无接口，不支持 |
-| Debug（内置模拟数据） | 本地 Mock（仅 `src/debug`） | 已实现 | 仅 debug 构建，**打不进 Release** |
+| 平台 | 实现方式 | 状态 |
+| --- | --- | --- |
+| ChatGPT / Codex | Android Bridge Provider + 桌面桥适配器 | IMPLEMENTED（无公开订阅额度 API；Bridge 端返回 `unsupported`，不造假） |
+| 智谱 GLM Coding Plan | Android Bridge Provider + 官方用量接口适配器 | IMPLEMENTED / NEEDS_CREDENTIAL（待真实订阅 Token 做 E2E；解析结构已核对 2026-09） |
+| MiniMax Token / Coding Plan | Android Bridge Provider + 桌面桥适配器 | IMPLEMENTED / NEEDS_CREDENTIAL（官方 schema 未公开，待真实抓包；解析失败返回 unsupported） |
+| OpenCode Go | Android Bridge Provider + 桌面桥适配器 | IMPLEMENTED / NEEDS_CREDENTIAL（待真实账号 Key 做 E2E） |
+| Grok / xAI | Unavailable 占位 Provider | UNSUPPORTED（官方无订阅额度 API） |
+| Debug（内置模拟数据） | 本地 Mock（仅 `src/debug`） | 仅 debug 构建，**打不进 Release** |
 
 各平台额度数据与桥接协议详见 [docs/providers](docs/providers/)。
 桌面桥使用方式见 [desktop-bridge/README.md](desktop-bridge/README.md)。

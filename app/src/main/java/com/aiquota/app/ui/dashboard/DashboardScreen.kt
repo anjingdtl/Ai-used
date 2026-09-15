@@ -121,7 +121,7 @@ private fun EmptyDashboard(onNavigateToAddAccount: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                text = "点击右下角 + 添加你的 ChatGPT、GLM、MiniMax 等订阅，\n统一查看剩余额度。",
+                text = "点击右上角 + 添加你的 ChatGPT、GLM、MiniMax 等订阅，\n统一查看剩余额度。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center

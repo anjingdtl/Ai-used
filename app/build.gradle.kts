@@ -103,6 +103,7 @@ dependencies {
     // 单元测试
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
+    testImplementation(libs.mockwebserver)
     testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)

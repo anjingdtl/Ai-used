@@ -1,48 +1,39 @@
-# MiniMax Token / Coding Plan 额度（`providerId: minimax`）
+# MiniMax Token Plan 额度（`providerId: minimax`）
 
-> 最后核实日期：2026-09-15（以官方现状为准，勿以本文替代线上核实）
-> 状态：**代码已实现，真实 E2E 未验收（待真实账号 Key）**
+> 最后核实日期：2026-09-15
+> 状态口径：**IMPLEMENTED / NEEDS_CREDENTIAL · 结构未公开**（解析只在识别到结构化窗口对象时成功，否则诚实返回 unsupported）
 
-## 套餐结构
-
-MiniMax 提供 **Token Plan（订阅 Token 包）** 与 Coding Plan。两者均以额度/用量展示。
-
-## 额度窗口
-
-以**滚动窗口**为主（`ROLLING_5H`），部分响应含 `window_type`/`cycle`。App 建模为 QuotaBucket。
-
-## 是否有官方 API
-
-**Yes**，官方公开端点：
+## 官方接口
 
 ```
 GET https://www.minimaxi.com/v1/token_plan/remains
+Authorization: Bearer <Token Plan 订阅 Key>
 ```
 
-响应含用量百分比字段（`used_percent` / `remaining_percent` / `rolling*`）。
+## ⚠️ 结构未公开（P0-6 诚实口径）
 
-## 是否有官方 CLI 查询能力
+- MiniMax 官方文档**只提供 curl 示例，未公开返回 JSON schema**。
+- 因此**不依赖** `remaining_percent` 之类的单个猜测字段来算出额度并默默成功。
+- 解析器仅在响应中出现**结构化窗口对象**（如 `rollingUsage` / `weeklyUsage`，内含 `usagePercent` + `resetInSec` / `resetAt`）时才解析为对应窗口的 QuotaBucket。
+- 否则返回 `source="unsupported"`（`Provider 未配置/未开放` 语义），**绝不产出空 Bucket + LIVE**。
 
-无独立 CLI；官方 API 即权威来源。
+fixture `desktop-bridge/fixtures/minimax_token_plan_2026_09.json` 即代表这种「模糊单值」形态，用于回归验证必须被拒绝。
 
-## 认证方式
+## 窗口模型（假设结构，待真实抓包固化）
 
-- 桌面桥：环境变量 `AIQUOTA_MINIMAX_KEY`，请求头 `Authorization: Bearer <key>`。
-- Android 端凭据：Bridge Bearer（存于 Keystore 加密）。
+| Bucket | windowType | 来源字段（假设） |
+| --- | --- | --- |
+| 滚动用量（5 小时） | `ROLLING_5_HOURS` | `rollingUsage` |
+| 周用量 | `WEEKLY` | `weeklyUsage` |
 
-## 是否支持 Android 直连
+> 拿到一次真实脱敏抓包后，请按真实结构更新解析器与 fixture，并在此记录字段说明。
 
-**当前版本未开启直连**。Android 走 `BridgeQuotaProvider`（connector=BRIDGE），
-Bridge 侧再直连官方 `minimaxi.com` 端点。
+## 通道
 
-## 实际代码实现方式
-
-- 桌面桥：`MiniMaxAdapter` → 官方 `/v1/token_plan/remains`，解析 used/remaining/rolling 百分比。
-  结构不匹配时返回 `source="unsupported"`，不伪造。
-- Android：`ProviderModule.bindMiniMax()` = `BridgeQuotaProvider(ProviderId.MINIMAX)`。
+- 桌面桥：`AIQUOTA_MINIMAX_KEY` 环境变量。
+- Android：`BridgeQuotaProvider(ProviderId.MINIMAX)`，经 Bridge 查询。
 
 ## 可靠性风险
 
-- 响应字段名较杂（`used_percent`/`remaining_percent`/`rollingUsage` 并存），按多种 key 兜底解析。
-- 自测见 `bridge_self_test.py::run_minimax`（37% 样例）。
-- 需要真实账号 Key 做最终 E2E。
+- **未做真实 E2E**：官方 schema 未确认，当前解析是「结构未知时拒绝、有结构时解析」的安全策略。
+- 需提供一次真实账号的脱敏响应（或直接给 `AIQUOTA_MINIMAX_KEY` 供 Bridge 直查）才能固化为 E2E_VERIFIED。

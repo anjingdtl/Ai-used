@@ -1,7 +1,7 @@
 # ChatGPT / Codex 额度（`providerId: codex`）
 
 > 最后核实日期：2026-09-15（以官方现状为准，勿以本文替代线上核实）
-> 状态：**代码已实现，真实 E2E 未验收**
+> 状态口径：**IMPLEMENTED / UNSUPPORTED_AUTOMATION**（官方无订阅额度 API；`codex status` 仅登录态，额度需交互式 `/status`，无法非交互取值 -> `source="unsupported"`，不编造）
 
 ## 套餐结构
 

@@ -77,14 +77,28 @@ def run_glm():
 
 
 def run_minimax():
-    payload = _load("minimax_token_plan_2026_09.json")
-    _patch(payload)
+    # 场景 1（P0-6）：官方 schema 未公开、fixture 为模糊的单值 remaining_percent。
+    # 不允许依赖猜测字段默默成功 —— 必须诚实返回 unsupported，绝不产出空 Bucket + LIVE。
+    ambiguous = _load("minimax_token_plan_2026_09.json")
+    _patch(ambiguous)
+    out = bridge.MiniMaxAdapter().fetch("acc2")
+    assert out["source"] == "unsupported", out
+    assert "buckets" not in out, out
+    print("  MiniMax ambiguous -> unsupported OK (拒绝猜测解析)")
+
+    # 场景 2：识别到结构化窗口对象（rollingUsage / weeklyUsage）时才解析为合法 Bucket。
+    structured = {
+        "rollingUsage": {"usagePercent": 37.0, "resetInSec": 1200},
+        "weeklyUsage": {"usagePercent": 63.0, "resetInSec": 3600},
+    }
+    _patch(structured)
     out = bridge.MiniMaxAdapter().fetch("acc2")
     assert out["source"] == "bridge", out
-    assert out["buckets"][0]["usedPercent"] == 37.0, out  # 100 - 63
-    assert out["buckets"][0]["remainingPercent"] == 63.0, out
+    windows = [b["windowType"] for b in out["buckets"]]
+    assert "ROLLING_5_HOURS" in windows and "WEEKLY" in windows, out
+    assert out["buckets"][0]["usedPercent"] == 37.0, out
     _assert_protocol_windows(out["buckets"])
-    print("  MiniMax parse OK:", [(b["id"], b["windowType"], b["usedPercent"]) for b in out["buckets"]])
+    print("  MiniMax structured -> OK:", [(b["id"], b["windowType"], b["usedPercent"]) for b in out["buckets"]])
 
 
 def run_opencode():

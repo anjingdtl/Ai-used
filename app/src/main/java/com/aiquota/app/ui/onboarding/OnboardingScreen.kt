@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 
 private data class OnboardFeature(
     val icon: ImageVector,
@@ -117,10 +119,10 @@ fun OnboardingScreen(
 
             Spacer(Modifier.height(32.dp))
 
+            val scope = rememberCoroutineScope()
             Button(
                 onClick = {
                     // P1-5：先等待 DataStore 写入完成，再导航；避免写入前被杀导致下次仍进引导页
-                    val scope = rememberCoroutineScope()
                     scope.launch {
                         viewModel.markCompletedSuspended()
                         onStart()

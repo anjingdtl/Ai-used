@@ -234,7 +234,10 @@ private fun ProviderConfigScreen(
 @Composable
 private fun TestResultRow(state: ConnectionTestState) {
     val (icon, color, text) = when (state) {
-        is ConnectionTestState.Success -> Triple(Icons.Default.Check, Color(0xFF2E7D32), "连接成功，Provider 可用")
+        is ConnectionTestState.Success -> Triple(
+            Icons.Default.Check, Color(0xFF2E7D32),
+            state.planName?.takeIf { it.isNotBlank() }
+                ?: "连接成功，目标 Provider 已可通过 Bridge 查询额度")
         is ConnectionTestState.Failure -> Triple(Icons.Default.Error, MaterialTheme.colorScheme.error, state.message)
         else -> return
     }

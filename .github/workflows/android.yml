@@ -46,6 +46,18 @@ jobs:
       - name: Smoke-test desktop bridge parsers
         run: python3 desktop-bridge/bridge_self_test.py
 
+      - name: Bridge HTTP server integration tests
+        run: python3 desktop-bridge/bridge_http_test.py
+
+      - name: Release APK must not leak debug mock strings
+        run: |
+          unzip -o -q app/build/outputs/apk/release/app-release-unsigned.apk 'classes*.dex' -d /tmp/rel-dex
+          if grep -aRqE "MockScenario|DebugQuotaProvider" /tmp/rel-dex; then
+            echo "::error::Release APK contains debug-only mock strings"
+            exit 1
+          fi
+          echo "OK: release APK has no debug mock strings"
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

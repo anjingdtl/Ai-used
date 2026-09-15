@@ -143,12 +143,26 @@ class QuotaRepositoryImplTest {
     }
 
     @Test
-    fun `ProviderUnavailable_映射为UNAVAILABLE`() = runTest {
+    fun `ProviderUnavailable_有缓存时_标记CACHED不清空旧数据`() = runTest {
         coEvery { quotaDao.getLastSnapshot("acc1") } returns cachedEntity
         coEvery { provider.fetchQuota(any()) } answers { throw QueryError.ProviderUnavailable }
 
         repo.refresh("acc1")
 
+        // P0-3：ProviderUnavailable（含 Bridge unsupported）有旧数据时必须保留并标记 CACHED，
+        // 绝不能清空旧快照或把 unsupported 当成功 LIVE。
+        coVerify(exactly = 0) { quotaDao.upsertSnapshot(any()) }
+        coVerify { eventDao.insertSyncEvent(match { it.status == SyncStatus.CACHED.name }) }
+    }
+
+    @Test
+    fun `ProviderUnavailable_无缓存时_标记UNAVAILABLE`() = runTest {
+        coEvery { quotaDao.getLastSnapshot("acc1") } returns null
+        coEvery { provider.fetchQuota(any()) } answers { throw QueryError.ProviderUnavailable }
+
+        repo.refresh("acc1")
+
+        coVerify(exactly = 0) { quotaDao.upsertSnapshot(any()) }
         coVerify { eventDao.insertSyncEvent(match { it.status == SyncStatus.UNAVAILABLE.name }) }
     }
 }

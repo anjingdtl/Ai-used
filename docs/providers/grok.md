@@ -1,7 +1,7 @@
 # Grok / xAI 额度（`providerId: grok`）
 
 > 最后核实日期：2026-09-15（以官方现状为准，勿以本文替代线上核实）
-> 状态：**代码已实现（Unavailable 占位）；官方无额度接口，不支持**
+> 状态口径：**UNSUPPORTED**（官方无订阅额度 API / CLI 非交互取值；Android 端 `UnavailableQuotaProvider` 恒显示 UNAVAILABLE）
 
 ## 套餐结构
 

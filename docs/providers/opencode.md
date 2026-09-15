@@ -1,55 +1,48 @@
 # OpenCode Go 额度（`providerId: opencode_go`）
 
-> 最后核实日期：2026-09-15（以官方现状为准，勿以本文替代线上核实）
-> 状态：**代码已实现，真实 E2E 未验收（待真实账号 Key）**
+> 最后核实日期：2026-09-15
+> 状态口径：**IMPLEMENTED / NEEDS_CREDENTIAL**（代码已按当前真实结构实现，真实 E2E 待真实账号 Key）
 
-## 套餐结构
-
-OpenCode Go / opencode 提供按周期（滚动 5h / 周 / 月）的使用额度。
-
-## 额度窗口
-
-| Bucket | windowType |
-| --- | --- |
-| 滚动 5 小时 | `ROLLING_5H` |
-| 本周额度 | `WEEKLY` |
-| 本月额度 | `MONTHLY` |
-
-## 是否有官方 API
-
-**Yes**，官方用量端点：
+## 官方用量接口
 
 ```
 GET https://opencode.ai/zen/go/v1/usage
+Authorization: Bearer <Key>
 ```
 
-响应含 `rollingUsage` / `weeklyUsage` / `monthlyUsage` 百分比（或对象，内含
-`usagePercent` / `resetInSec` 等）。
+### 真实结构（见 `desktop-bridge/fixtures/opencode_usage_2026_09.json`）
 
-## 是否有官方 CLI 查询能力
+顶层分 `rollingUsage` / `weeklyUsage` / `monthlyUsage` 三档，每档结构：
 
-opencode CLI 以其本地登录态（`~/.local/share/opencode/auth.json`，`opencode-go` 条目）保存 API Key；
-Bridge 可读取该 Key 直查官方用量 API。
+```json
+{ "rollingUsage": { "usagePercent": 32.0, "resetInSec": 1200 } }
+```
 
-## 认证方式
+- `usagePercent`：0–100 已耗百分比
+- `resetInSec`：**相对秒偏移**（`1200` = 从现在起 1200 秒）
 
-- 桌面桥：环境变量 `AIQUOTA_OPENCODE_KEY`，或自动读取本地 `auth.json`（兼容 `XDG_DATA_HOME` /
-  `OPENCODE_AUTH_CONTENT`）。请求头 `Authorization: Bearer <key>`。
-- Android 端凭据：Bridge Bearer（存于 Keystore 加密）。
+## 窗口模型
 
-## 是否支持 Android 直连
+| Bucket | windowType（协议常量） | 来源 |
+| --- | --- | --- |
+| 滚动用量 | `ROLLING_5_HOURS` | `rollingUsage` |
+| 本周额度 | `WEEKLY` | `weeklyUsage` |
+| 本月额度 | `MONTHLY` | `monthlyUsage` |
 
-**当前版本未开启直连**。Android 走 `BridgeQuotaProvider`（connector=BRIDGE），
-Bridge 侧再直连官方 `opencode.ai` 端点。
+## reset 语义（P0-7，重要）
 
-## 实际代码实现方式
+- 顶层/各档返回的是 `resetInSec`（**相对秒**），不是绝对时间。
+- 必须计算为：`now + resetInSec` 输出 ISO-8601 UTC（如 `2026-09-15T10:20:30Z`）。
+- **禁止**把 `1200` 这类秒数直接塞进 `resetAt` 字符串。
+- 所有 reset 统一经 `_resolve_reset()` 归一为 ISO-8601 UTC。
 
-- 桌面桥：`OpenCodeAdapter` → 官方 `/zen/go/v1/usage`，用 `_pct_value` 兼容数字/对象字段，
-  产出 5h/周/月 桶。结构不匹配返回 `source="unsupported"`。
-- Android：`ProviderModule.bindOpenCode()` = `BridgeQuotaProvider(ProviderId.OPENCODE_GO)`。
+## 通道
+
+- 桌面桥：`AIQUOTA_OPENCODE_KEY`，或自动读取本地 `~/.local/share/opencode/auth.json`（`opencode-go` 条目，兼容 `XDG_DATA_HOME` / `OPENCODE_AUTH_CONTENT`）。
+- Android：`BridgeQuotaProvider(ProviderId.OPENCODE_GO)`，经 Bridge 查询。
 
 ## 可靠性风险
 
-- 官方端点字段随产品演进，`_pct_value` 多 key 兜底已加。
-- 自测见 `bridge_self_test.py::run_opencode`（32% / 53% / 11% 样例）。
+- 官方端点字段随产品演进；结构不匹配返回 `source="unsupported"`，绝不伪造。
+- 自测见 `bridge_self_test.py::run_opencode`（32% / 53% / 11%，并验证 reset = now+1200s）。
 - 需要真实账号 Key 做最终 E2E。
